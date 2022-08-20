@@ -5,6 +5,8 @@ import gg.xp.reevent.scan.ScanMe;
 import gg.xp.xivdata.data.ActionInfo;
 import gg.xp.xivsupport.events.ACTLogLineEvent;
 import gg.xp.xivsupport.events.fflogs.FflogsRawEvent;
+import gg.xp.xivsupport.events.nextuiws.NuiWsJsonMsg;
+import gg.xp.xivsupport.events.nextuiws.NuiWsRawMsg;
 import gg.xp.xivsupport.events.ws.ActWsRawMsg;
 import gg.xp.xivsupport.gui.util.GuiUtil;
 import gg.xp.xivsupport.slf4j.LogEvent;
@@ -26,6 +28,11 @@ public class DefaultRightClickOptions {
 				"Copy WS JSON",
 				Event.class,
 				e -> e.getThisOrParentOfType(ActWsRawMsg.class),
+				line -> GuiUtil.copyTextToClipboard(line.getRawMsgData())));
+		repo.addOption(CustomRightClickOption.forRowWithConverter(
+				"Copy WS JSON",
+				Event.class,
+				e -> e.getThisOrParentOfType(NuiWsRawMsg.class),
 				line -> GuiUtil.copyTextToClipboard(line.getRawMsgData())));
 		repo.addOption(CustomRightClickOption.forRowWithConverter(
 				"Copy FFLogs Fields",

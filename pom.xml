@@ -302,6 +302,16 @@
                 <artifactId>testutils-samplelogs</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>gg.xp</groupId>
+                <artifactId>overlayplugin-ws</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>gg.xp</groupId>
+                <artifactId>nextui-ws</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -318,8 +328,8 @@
         <module>testutils</module>
         <module>plugins</module>
         <module>triggers/titan-jails</module>
-        <module>telesto-support</module>
         <module>triggers/custom-party-overlay</module>
         <module>testutils/testutils-samplelogs</module>
+        <module>integrations</module>
     </modules>
 </project>

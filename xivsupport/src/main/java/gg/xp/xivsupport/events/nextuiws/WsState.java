@@ -1,4 +1,4 @@
-package gg.xp.xivsupport.events.ws;
+package gg.xp.xivsupport.events.nextuiws;
 
 import gg.xp.reevent.context.SubState;
 

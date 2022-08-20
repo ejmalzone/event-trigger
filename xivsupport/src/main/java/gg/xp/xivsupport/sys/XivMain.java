@@ -10,6 +10,7 @@ import gg.xp.reevent.scan.AutoHandlerScan;
 import gg.xp.reevent.topology.TopoInfoImpl;
 import gg.xp.xivdata.data.ActionLibrary;
 import gg.xp.xivdata.data.StatusEffectLibrary;
+import gg.xp.xivsupport.events.nextuiws.NuiWsLogSource;
 import gg.xp.xivsupport.events.state.PicoStateStore;
 import gg.xp.xivsupport.events.state.XivStateImpl;
 import gg.xp.xivsupport.events.ws.ActWsLogSource;
@@ -143,6 +144,7 @@ public final class XivMain {
 		dist.acceptEvent(new InitEvent());
 		pico.getComponent(EventMaster.class).start();
 		pico.getComponent(ActWsLogSource.class).start();
+		pico.getComponent(NuiWsLogSource.class).start();
 		log.info("Everything seems to have started successfully");
 		return pico;
 	}
