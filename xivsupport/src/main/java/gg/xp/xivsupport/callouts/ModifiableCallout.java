@@ -16,7 +16,9 @@ import java.awt.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -45,6 +47,7 @@ public class ModifiableCallout<X> {
 	private @Nullable String extendedDescription;
 	private final Predicate<RawModifiedCallout<X>> expiry;
 	private Function<? super X, ? extends @Nullable Component> guiProvider = e -> null;
+	private final List<ModifiableSubCallout> subs = new ArrayList<>();
 	private boolean enabledByDefault = true;
 
 	private static final Duration defaultHangDuration = Duration.of(5, ChronoUnit.SECONDS);
@@ -210,6 +213,22 @@ public class ModifiableCallout<X> {
 	 */
 	public ModifiableCallout<X> extendedDescription(String extendedDescription) {
 		this.extendedDescription = extendedDescription;
+		return this;
+	}
+
+	/**
+	 * Adds a customizable sub-callout
+	 *
+	 * @param object The object that, when used as a callout argument, is to be replaced with the user's preferred
+	 *               representation
+	 * @param settingKey A unique string key for this item. Try to only use alphanumeric characters and hyphens to
+	 *                      avoid issues.
+	 * @param label A short label to be displayed in the UI
+	 * @param defaultScript The default "value". Can be a fixed string or a script.
+	 * @return this (builder pattern)
+	 */
+	public ModifiableCallout<X> subCallout(Object object, String settingKey, String label, String defaultScript) {
+		subs.add(new ModifiableSubCallout(settingKey, label, object, defaultScript));
 		return this;
 	}
 
