@@ -143,6 +143,14 @@ public final class RawXivCombatantInfo implements Serializable {
 		return type;
 	}
 
+	public int getCurHp() {
+		return curHp;
+	}
+
+	public int getMaxHp() {
+		return maxHp;
+	}
+
 	public long getCurMp() {
 		return curMp;
 	}

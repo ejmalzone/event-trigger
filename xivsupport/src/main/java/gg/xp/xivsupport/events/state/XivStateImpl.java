@@ -4,8 +4,7 @@ import gg.xp.reevent.events.CurrentTimeSource;
 import gg.xp.reevent.events.EventContext;
 import gg.xp.reevent.events.EventMaster;
 import gg.xp.reevent.scan.HandleEvents;
-import gg.xp.xivdata.data.Job;
-import gg.xp.xivdata.data.XivMap;
+import gg.xp.xivdata.data.*;
 import gg.xp.xivsupport.events.actlines.events.MapChangeEvent;
 import gg.xp.xivsupport.events.actlines.events.OnlineStatus;
 import gg.xp.xivsupport.events.actlines.events.RawAddCombatantEvent;
@@ -14,6 +13,10 @@ import gg.xp.xivsupport.events.actlines.events.RawPlayerChangeEvent;
 import gg.xp.xivsupport.events.actlines.events.RawRemoveCombatantEvent;
 import gg.xp.xivsupport.events.actlines.events.XivStateRecalculatedEvent;
 import gg.xp.xivsupport.events.actlines.events.ZoneChangeEvent;
+import gg.xp.xivsupport.events.state.internal.HpTracker;
+import gg.xp.xivsupport.events.state.internal.MpTracker;
+import gg.xp.xivsupport.events.state.internal.MutableCombatantData;
+import gg.xp.xivsupport.events.state.internal.PosTracker;
 import gg.xp.xivsupport.models.CombatantType;
 import gg.xp.xivsupport.models.HitPoints;
 import gg.xp.xivsupport.models.ManaPoints;
@@ -239,7 +242,7 @@ public class XivStateImpl implements XivState {
 						continue;
 					}
 					if (computed.getHp().max() < primaryCombatant.getHp().max()
-							&& computed.getbNpcId() != primaryCombatant.getbNpcId()) {
+					    && computed.getbNpcId() != primaryCombatant.getbNpcId()) {
 						potentialFakes.add(otherCombatant);
 					}
 				}
@@ -433,19 +436,19 @@ public class XivStateImpl implements XivState {
 
 	@Override
 	public void provideCombatantHP(XivCombatant target, @NotNull HitPoints hitPoints) {
-		getOrCreateData(target.getId()).setHpOverride(hitPoints);
+		getOrCreateData(target.getId()).setNetHp(hitPoints);
 		dirtyOverrides = true;
 	}
 
 	@Override
 	public void provideCombatantMP(XivCombatant target, @NotNull ManaPoints manaPoints) {
-		getOrCreateData(target.getId()).setMpOverride(manaPoints);
+		getOrCreateData(target.getId()).setNetMp(manaPoints);
 		dirtyOverrides = true;
 	}
 
 	@Override
 	public void provideCombatantPos(XivCombatant target, Position newPos) {
-		getOrCreateData(target.getId()).setPosOverride(newPos);
+		getOrCreateData(target.getId()).setOpPos(newPos);
 		dirtyOverrides = true;
 	}
 
@@ -582,6 +585,12 @@ public class XivStateImpl implements XivState {
 		}
 	}
 
+	@Override
+	public void provideCombatantRawStringMap(long id, Map<String, String> rawData) {
+		CombatantData data = getOrCreateData(id);
+		data.updateFromRawStringData(rawData);
+	}
+
 	private final Map<Long, CombatantData> combatantData = new HashMap<>();
 	// This lock is ONLY for adding/removing entries to the map. Individual values have their own locks.
 	private final EnhancedReadWriteReentrantLock lock = new EnhancedReadWriteReentrantLock();
@@ -605,10 +614,19 @@ public class XivStateImpl implements XivState {
 	private final class CombatantData {
 		// TODO: add party info?
 		private final long id;
+		//		private final MutableCombatantData opData;
+//		private final MutableCombatantData memActData;
+//		private final MutableCombatantData netActData;
+//		private final MutableCombatantData partyData;
+//		private final MutableCombatantData fallbackActData;
+		// HP Logic: ACT Net lines > OP > ACT Mem lines
+		private final HpTracker hpTracker = new HpTracker();
+		// MP Logic: OP > ACT Mem
+		private final MpTracker mpTracker = new MpTracker();
+		// Pos logic: Most recent always
+		private final PosTracker posTracker = new PosTracker();
+		private final MutableCombatantData mcd = new MutableCombatantData();
 		private @Nullable RawXivCombatantInfo raw;
-		private @Nullable Position posOverride;
-		private @Nullable HitPoints hpOverride;
-		private @Nullable ManaPoints mpOverride;
 		private @Nullable XivCombatant fromOtherActLine;
 		private @Nullable RawXivPartyInfo fromPartyInfo;
 		private OnlineStatus status = OnlineStatus.UNKNOWN;
@@ -617,8 +635,8 @@ public class XivStateImpl implements XivState {
 		private volatile boolean dirty = true;
 		private boolean removed;
 		private XivCombatant owner;
-		private long shieldPercent;
-		private short tfId = -1;
+		// Future functionality to support arbitrary params from OP etc
+		private final Map<String, Object> extra = new HashMap<>();
 
 		private CombatantData(long id) {
 			this.id = id;
@@ -643,15 +661,32 @@ public class XivStateImpl implements XivState {
 		}
 
 		public void setRawFromAct(@Nullable RawXivCombatantInfo raw) {
+			if (raw != null) {
+				if (hpTracker.setActMem(raw.getHP()) |
+				    mpTracker.setActMem(raw.getHP()) |
+				    posTracker.setActMem(raw.getPos())) {
+					mcd.transformationId = raw.getTransformationId();
+					mcd.weaponId = raw.getWeaponId();
+					dirty = true;
+				}
+			}
 			if (this.raw == null) {
 				setRaw(raw);
 			}
 		}
 
 		public void setRaw(@Nullable RawXivCombatantInfo raw) {
-			if (!Objects.equals(this.raw, raw) || posOverride != null) {
+			if (raw != null) {
+				if (hpTracker.setMem(raw.getHP()) |
+				    mpTracker.setOpMem(raw.getHP()) |
+				    posTracker.setOpMem(raw.getPos())) {
+					mcd.transformationId = raw.getTransformationId();
+					mcd.weaponId = raw.getWeaponId();
+					dirty = true;
+				}
+			}
+			if (!Objects.equals(this.raw, raw)) {
 				this.raw = raw;
-				this.posOverride = null;
 				dirty = true;
 			}
 		}
@@ -661,23 +696,20 @@ public class XivStateImpl implements XivState {
 			dirty = true;
 		}
 
-		public void setPosOverride(@Nullable Position posOverride) {
-			if (!Objects.equals(this.posOverride, posOverride)) {
-				this.posOverride = posOverride;
+		public void setOpPos(@Nullable Position posOverride) {
+			if (posTracker.setOpMem(posOverride)) {
 				dirty = true;
 			}
 		}
 
-		public void setHpOverride(@Nullable HitPoints hpOverride) {
-			if (!Objects.equals(this.hpOverride, hpOverride)) {
-				this.hpOverride = hpOverride;
+		public void setNetHp(@Nullable HitPoints hpOverride) {
+			if (hpTracker.setNet(hpOverride)) {
 				dirty = true;
 			}
 		}
 
-		public void setMpOverride(@Nullable ManaPoints mpOverride) {
-			if (!Objects.equals(this.mpOverride, mpOverride)) {
-				this.mpOverride = mpOverride;
+		public void setNetMp(@Nullable ManaPoints mpOverride) {
+			if (mpTracker.setNet(mpOverride)) {
 				dirty = true;
 			}
 		}
@@ -698,12 +730,12 @@ public class XivStateImpl implements XivState {
 		}
 
 		public void setShieldPct(long shieldPct) {
-			this.shieldPercent = shieldPct;
+			mcd.shieldPercent = shieldPct;
 			dirty = true;
 		}
 
 		public void setTransformationId(short tfId) {
-			this.tfId = tfId;
+			mcd.transformationId = tfId;
 			dirty = true;
 		}
 
@@ -741,10 +773,9 @@ public class XivStateImpl implements XivState {
 			XivWorld world = XivWorld.of();
 			long rawType = raw != null ? raw.getRawType() : (id >= 0x4000_0000 ? 2 : 1);
 
-			// HP prefers trusted ACT hp lines
-			HitPoints hp = hpOverride != null ? hpOverride : raw != null ? raw.getHP() : null;
-			ManaPoints mp = mpOverride != null ? mpOverride : raw != null ? raw.getMP() : null;
-			Position pos = posOverride != null ? posOverride : raw != null ? raw.getPos() : fromOther != null ? fromOther.getPos() : null;
+			HitPoints hp = hpTracker.getHp();
+			ManaPoints mp = mpTracker.getMp();
+			Position pos = posTracker.get();
 
 			XivCombatant computed;
 			long bnpcId = raw != null ? raw.getBnpcId() : 0;
@@ -752,12 +783,12 @@ public class XivStateImpl implements XivState {
 			long partyType = raw != null ? raw.getPartyType() : 0;
 			long level = raw != null ? raw.getLevel() : fromPartyInfo != null ? fromPartyInfo.getLevel() : 90;
 			long ownerId = raw != null ? raw.getOwnerId() : 0;
-			// TODO: changing primary player should dirty this
-			boolean isPlayer = rawType == 1;
-			long shieldAmount = hp != null ? shieldPercent * hp.max() / 100 : 0;
-			short transformationId = tfId != -1 ? tfId : (raw != null ? raw.getTransformationId() : -1);
-			short weaponId = (raw != null ? raw.getWeaponId() : -1);
-			if (isPlayer) {
+
+			boolean isPc = rawType == 1;
+			long shieldAmount = hp != null ? mcd.shieldPercent * hp.max() / 100 : 0;
+			short transformationId = mcd.transformationId;
+			short weaponId = mcd.weaponId;
+			if (isPc) {
 				computed = new XivPlayerCharacter(
 						id,
 						name,
@@ -815,6 +846,27 @@ public class XivStateImpl implements XivState {
 		public synchronized XivCombatant getComputed() {
 			recomputeIfDirty();
 			return computed;
+		}
+
+		public void updateFromRawStringData(Map<String, String> rawData) {
+//			boolean dirty = false;
+//			rawData.forEach((k, v) -> {
+//				switch (k) {
+//					// Ignoring HP because it's already handled by enough sources
+//					case "CurrentMP" -> {
+//						int cur = Integer.parseInt(v);
+//						String rawMax = rawData.get("MaxMP");
+//						if (rawMax == null) {
+//							ManaPoints mp = calcMp(raw);
+//							if (mp == null) {
+//								return;
+//							}
+//							setMpOverride(mp, );
+//						}
+//						int max
+//					}
+//				}
+//			});
 		}
 	}
 }

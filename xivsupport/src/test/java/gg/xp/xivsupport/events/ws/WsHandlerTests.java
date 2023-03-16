@@ -354,8 +354,8 @@ public class WsHandlerTests {
 				      "Job": 0,
 				      "Level": 0,
 				      "Name": "Some Boss",
-				      "CurrentHP": 0,
-				      "MaxHP": 0,
+				      "CurrentHP": 123,
+				      "MaxHP": 456,
 				      "CurrentMP": 0,
 				      "MaxMP": 10000,
 				      "PosX": 116.301865,
@@ -412,6 +412,8 @@ public class WsHandlerTests {
 		Assert.assertFalse(otherCombatant.isPc());
 		Assert.assertFalse(otherCombatant.isThePlayer());
 		Assert.assertFalse(otherCombatant.isEnvironment());
+		Assert.assertEquals(otherCombatant.getHp().current(), 123);
+		Assert.assertEquals(otherCombatant.getHp().max(), 456);
 
 
 		List<Job> jobs = xivState.getPartyList().stream().map(XivPlayerCharacter::getJob).collect(Collectors.toList());

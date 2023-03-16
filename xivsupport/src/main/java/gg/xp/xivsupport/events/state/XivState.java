@@ -108,4 +108,8 @@ public interface XivState extends SubState {
 	}
 
 	void provideTransformation(long entityId, short transformationId);
+
+	default void provideCombatantRawStringMap(long id, Map<String, String> rawData) {
+		throw new UnsupportedOperationException("Not supported");
+	}
 }
