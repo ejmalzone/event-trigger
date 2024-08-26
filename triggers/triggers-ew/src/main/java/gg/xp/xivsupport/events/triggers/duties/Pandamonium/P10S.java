@@ -5,6 +5,7 @@ import gg.xp.reevent.events.EventContext;
 import gg.xp.reevent.scan.AutoChildEventHandler;
 import gg.xp.reevent.scan.AutoFeed;
 import gg.xp.reevent.scan.FilteredEventHandler;
+import gg.xp.xivdata.data.*;
 import gg.xp.xivdata.data.duties.*;
 import gg.xp.xivsupport.callouts.CalloutRepo;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
@@ -23,11 +24,15 @@ import gg.xp.xivsupport.events.triggers.support.PlayerHeadmarker;
 import gg.xp.xivsupport.models.ArenaPos;
 import gg.xp.xivsupport.models.ArenaSector;
 import gg.xp.xivsupport.models.XivCombatant;
+import gg.xp.xivsupport.models.XivEntity;
+import gg.xp.xivsupport.models.XivPlayerCharacter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @CalloutRepo(name = "P10S", duty = KnownDuty.P10S)
@@ -115,10 +120,13 @@ public class P10S extends AutoChildEventHandler implements FilteredEventHandler 
 				if (myTether.isPresent()) {
 					s.updateCall(dividingWingsBreakChains);
 				}
+
 				log.info("Meltdown: Start");
 				List<HeadMarkerEvent> headMarks = s.waitEventsQuickSuccession(2, HeadMarkerEvent.class, hme -> hme.getMarkerOffset() == -444, Duration.ofMillis(100));
 				log.info("Meltdown: Got HMs");
+
 				AbilityCastStart linestack = s.waitEvent(AbilityCastStart.class, acs -> acs.abilityIdMatches(0x829D));
+
 				log.info("Meltdown: Got Line Stack");
 				Optional<HeadMarkerEvent> myMarker = headMarks.stream().filter(hme -> hme.getTarget().isThePlayer()).findAny();
 				if (myMarker.isPresent()) {

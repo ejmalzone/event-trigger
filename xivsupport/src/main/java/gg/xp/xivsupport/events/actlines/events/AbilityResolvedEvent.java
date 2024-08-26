@@ -34,6 +34,9 @@ public class AbilityResolvedEvent extends BaseEvent implements HasSourceEntity, 
 		this.target = target;
 	}
 
+	public AbilityUsedEvent getOriginalEvent() {
+		return originalEvent;
+	}
 
 	@Override
 	public XivAbility getAbility() {
