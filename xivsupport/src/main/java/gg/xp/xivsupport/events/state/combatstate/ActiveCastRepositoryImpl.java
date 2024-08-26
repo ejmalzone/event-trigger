@@ -1,5 +1,6 @@
 package gg.xp.xivsupport.events.state.combatstate;
 
+import gg.xp.reevent.events.BaseEvent;
 import gg.xp.reevent.events.Event;
 import gg.xp.reevent.events.EventContext;
 import gg.xp.reevent.scan.HandleEvents;
@@ -7,6 +8,7 @@ import gg.xp.xivsupport.events.actlines.events.AbilityCastCancel;
 import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
 import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
 import gg.xp.xivsupport.events.actlines.events.HasAbility;
+import gg.xp.xivsupport.events.actlines.events.HasCastPrecursor;
 import gg.xp.xivsupport.events.actlines.events.HasSourceEntity;
 import gg.xp.xivsupport.events.misc.pulls.PullStartedEvent;
 import gg.xp.xivsupport.models.XivCombatant;
@@ -65,7 +67,7 @@ public class ActiveCastRepositoryImpl implements ActiveCastRepository {
 		}
 	}
 
-	private <X extends Event & HasSourceEntity & HasAbility> void doEnd(X event) {
+	private <X extends BaseEvent & HasSourceEntity & HasAbility & HasCastPrecursor> void doEnd(X event) {
 		CastTracker tracker;
 		synchronized (lock) {
 			tracker = cbtCasts.get(event.getSource());
@@ -74,6 +76,7 @@ public class ActiveCastRepositoryImpl implements ActiveCastRepository {
 			return;
 		}
 		if (tracker.getCast().getAbility().equals(event.getAbility())) {
+			event.setPrecursor(tracker.getCast());
 			tracker.setEnd(event);
 		}
 

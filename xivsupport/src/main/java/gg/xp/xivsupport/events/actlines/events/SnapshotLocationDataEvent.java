@@ -18,6 +18,12 @@ public class SnapshotLocationDataEvent extends BaseEvent implements DescribesCas
 	private final Position pos;
 	private final Double heading;
 
+	public SnapshotLocationDataEvent(AbilityUsedEvent event, DescribesCastLocation<?> other) {
+		this.event = event;
+		this.pos = other.getPos();
+		this.heading = other.getHeadingOnly();
+	}
+
 	public SnapshotLocationDataEvent(AbilityUsedEvent event, Position pos) {
 		this.event = event;
 		this.pos = pos;
@@ -55,5 +61,14 @@ public class SnapshotLocationDataEvent extends BaseEvent implements DescribesCas
 	@Override
 	public XivCombatant getSource() {
 		return event.getSource();
+	}
+
+	@Override
+	public String toString() {
+		return "SnapshotLocationDataEvent{" +
+		       "id=" + event.getAbility().getId() +
+		       ", pos=" + pos +
+		       ", heading=" + heading +
+		       '}';
 	}
 }

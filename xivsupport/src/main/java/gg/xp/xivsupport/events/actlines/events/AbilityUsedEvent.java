@@ -8,13 +8,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.Serial;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
 /**
  * Represents an ability snapshotting
  */
-public class AbilityUsedEvent extends BaseEvent implements HasSourceEntity, HasTargetEntity, HasAbility, HasEffects, HasTargetIndex {
+public class AbilityUsedEvent extends BaseEvent implements HasSourceEntity, HasTargetEntity, HasAbility, HasEffects, HasTargetIndex, HasCastPrecursor {
 
 	@Serial
 	private static final long serialVersionUID = -4539070760062288496L;
@@ -25,7 +26,9 @@ public class AbilityUsedEvent extends BaseEvent implements HasSourceEntity, HasT
 	private final long sequenceId;
 	private final long targetIndex;
 	private final long numberOfTargets;
+	private @Nullable Duration animationLock;
 	private @Nullable DescribesCastLocation<AbilityUsedEvent> locationInfo;
+	private @Nullable AbilityCastStart precursor;
 
 	public AbilityUsedEvent(XivAbility ability, XivCombatant caster, XivCombatant target, List<AbilityEffect> effects, long sequenceId, long targetIndex, long numberOfTargets) {
 		this.ability = ability;
@@ -89,6 +92,33 @@ public class AbilityUsedEvent extends BaseEvent implements HasSourceEntity, HasT
 		this.locationInfo = locationInfo;
 	}
 
+	@Override
+	public @Nullable AbilityCastStart getPrecursor() {
+		return precursor;
+	}
+
+	@Override
+	public void setPrecursor(@NotNull AbilityCastStart precursor) {
+		this.precursor = precursor;
+	}
+
+	/**
+	 * Get the animation lock.
+	 * <p>
+	 * Note that this is expected to be populated *after* this event is emitted, as this data
+	 * is not known at the time of the original event. In addition, it may never be present,
+	 * such as if you are importing a non-OP log, or an fflogs import.
+	 *
+	 * @see AnimationLockEvent
+	 * @return The animation lock, if one has been set.
+	 */
+	public @Nullable Duration getAnimationLock() {
+		return animationLock;
+	}
+
+	public void setAnimationLock(@Nullable Duration animationLock) {
+		this.animationLock = animationLock;
+	}
 
 	@Override
 	public String toString() {

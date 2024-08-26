@@ -6,14 +6,20 @@ import gg.xp.reevent.events.EventContext;
 import gg.xp.reevent.events.SystemEvent;
 import gg.xp.xivsupport.callouts.ModifiableCallout;
 import gg.xp.xivsupport.callouts.RawModifiedCallout;
+import gg.xp.xivsupport.events.actlines.events.AbilityCastCancel;
+import gg.xp.xivsupport.events.actlines.events.AbilityCastStart;
 import gg.xp.xivsupport.events.actlines.events.AbilityUsedEvent;
 import gg.xp.xivsupport.events.actlines.events.BuffApplied;
 import gg.xp.xivsupport.events.actlines.events.BuffRemoved;
 import gg.xp.xivsupport.events.delaytest.BaseDelayedEvent;
 import gg.xp.xivsupport.events.state.RefreshCombatantsRequest;
+import gg.xp.xivsupport.events.state.combatstate.ActiveCastRepository;
+import gg.xp.xivsupport.events.state.combatstate.CastResult;
+import gg.xp.xivsupport.events.state.combatstate.CastTracker;
 import gg.xp.xivsupport.events.state.combatstate.StatusEffectRepository;
 import gg.xp.xivsupport.speech.CalloutEvent;
 import gg.xp.xivsupport.speech.HasCalloutTrackingKey;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,6 +113,10 @@ public class SequentialTriggerController<X extends BaseEvent> {
 		waitMs(delay);
 	}
 
+	public void refreshCombatants() {
+		accept(new RefreshCombatantsRequest());
+	}
+
 	public void refreshCombatants(long delay) {
 		accept(new RefreshCombatantsRequest());
 		waitMs(delay);
@@ -114,9 +124,7 @@ public class SequentialTriggerController<X extends BaseEvent> {
 
 	public void forceExpire() {
 		synchronized (lock) {
-			// TODO: expire on wipe?
 			// Also make it configurable as to whether or not a wipe ends the trigger
-//			if (event.getHappenedAt().isAfter(expiresAt)) {
 			log.info("Sequential trigger force expired");
 			die = true;
 			lock.notifyAll();
@@ -245,12 +253,16 @@ public class SequentialTriggerController<X extends BaseEvent> {
 	 * NOT supplying an event.
 	 *
 	 * @param call The callout
+	 * @return The modified call.
 	 */
-	public <C> void updateCall(ModifiableCallout<C> call, C event) {
+	@Contract("null, _ -> null; !null, _ -> !null")
+	public <C> @Nullable RawModifiedCallout<C> updateCall(ModifiableCallout<C> call, C event) {
 		if (call == null) {
-			return;
+			return null;
 		}
-		updateCall(call.getModified(event, getParams()));
+		RawModifiedCallout<C> out = call.getModified(event, getParams());
+		updateCall(out);
+		return out;
 	}
 
 	/**
@@ -262,12 +274,16 @@ public class SequentialTriggerController<X extends BaseEvent> {
 	 * supplying an event.
 	 *
 	 * @param call The callout
+	 * @return The modified call
 	 */
-	public void call(ModifiableCallout<?> call) {
+	@Contract("null -> null; !null -> !null")
+	public @Nullable RawModifiedCallout<?> call(ModifiableCallout<?> call) {
 		if (call == null) {
-			return;
+			return null;
 		}
-		accept(call.getModified(getParams()));
+		RawModifiedCallout<?> out = call.getModified(getParams());
+		accept(out);
+		return out;
 	}
 
 	/**
@@ -279,12 +295,16 @@ public class SequentialTriggerController<X extends BaseEvent> {
 	 * NOT supplying an event.
 	 *
 	 * @param call The callout
+	 * @return The modified call
 	 */
-	public <C> void call(ModifiableCallout<C> call, C event) {
+	@Contract("null, _ -> null; !null, _ -> !null")
+	public <C> @Nullable RawModifiedCallout<C> call(ModifiableCallout<C> call, C event) {
 		if (call == null) {
-			return;
+			return null;
 		}
-		accept(call.getModified(event, getParams()));
+		RawModifiedCallout<C> out = call.getModified(event, getParams());
+		accept(out);
+		return out;
 	}
 
 	/**
@@ -384,7 +404,7 @@ public class SequentialTriggerController<X extends BaseEvent> {
 	 * @param limit      Number of events
 	 * @param timeoutMs  Timeout in ms to wait for events
 	 * @param eventClass Class of event
-	 * @param exclusive  false if you would like an event to be allowed to match multiple filters, rather than movingn
+	 * @param exclusive  false if you would like an event to be allowed to match multiple filters, rather than moving
 	 *                   on to the next event after a single match.
 	 * @param collectors The list of collectors.
 	 * @param <Y>        The type of event.
@@ -439,6 +459,52 @@ public class SequentialTriggerController<X extends BaseEvent> {
 			return waitEvent(BuffApplied.class, condition);
 		}
 	}
+
+	/**
+	 * Find an active cast, or wait for the matching cast to start.
+	 *
+	 * @param repo           The ActiveCastRepository
+	 * @param condition      The condition for the cast, i.e. the same thing you would feed to {@link #waitEvent}
+	 *                       and similar methods
+	 * @param includeExpired Whether to allow already-completed casts.
+	 * @return The cast.
+	 */
+	public AbilityCastStart findOrWaitForCast(ActiveCastRepository repo, Predicate<AbilityCastStart> condition, boolean includeExpired) {
+		var castMaybe = repo.getAll().stream().filter(ct -> {
+			if (!includeExpired && ct.getResult() != CastResult.IN_PROGRESS) {
+				return false;
+			}
+			return condition.test(ct.getCast());
+		}).findFirst().map(CastTracker::getCast).orElse(null);
+		if (castMaybe != null) {
+			return castMaybe;
+		}
+		else {
+			return waitEvent(AbilityCastStart.class, condition);
+		}
+	}
+
+	/**
+	 * Wait for a cast to finish, or return immediately if it already has finished.
+	 *
+	 * @param repo The ActiveCastRepository
+	 * @param cast The cast whose finish you wish to wait for.
+	 * @return The event that ended the cast. Will usually be an {@link AbilityUsedEvent}, but can also be other
+	 * event types such as {@link AbilityCastCancel} for when the cast is interrupted.
+	 */
+	public BaseEvent waitCastFinished(ActiveCastRepository repo, AbilityCastStart cast) {
+		var castMaybe = repo.getAll().stream().filter(ct -> ct.getCast() == cast).findFirst().orElse(null);
+		if (castMaybe != null) {
+			BaseEvent end = castMaybe.getEnd();
+			if (end != null) {
+				return end;
+			}
+		}
+		return waitEvent(AbilityUsedEvent.class, aue -> aue.getPrecursor() == cast);
+
+
+	}
+
 
 	public List<AbilityUsedEvent> collectAoeHits(Predicate<AbilityUsedEvent> condition) {
 		List<AbilityUsedEvent> out = new ArrayList<>(8);
